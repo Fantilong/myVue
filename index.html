@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -8,9 +9,11 @@
     <!-- <script src="./vue.js"></script> -->
     <script src="./myVue.js"></script>
 </head>
+
 <body>
     <script>
         const vue = new MyVue({
+            // const vue = new Vue({
             el: '#app',
             data: {
                 message: 'Hello Vue!'
@@ -22,7 +25,12 @@
             }
         })
 
+        vue.message = 1
+        vue.message = 2
+        vue.message = 3
+
 
     </script>
 </body>
+
 </html>
