@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vue 原理</title>
+    <!-- <script src="./vue.js"></script> -->
+    <script src="./myVue.js"></script>
+</head>
+<body>
+    <script>
+        const vue = new MyVue({
+            el: '#app',
+            data: {
+                message: 'Hello Vue!'
+            },
+            watch: {
+                message: function () {
+                    console.log('message is running', this.message);
+                }
+            }
+        })
+
+
+    </script>
+</body>
+</html>
