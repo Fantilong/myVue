@@ -7,6 +7,7 @@ function observe(data) {
     return new Observer(data)
 }
 // this.data.person
+// data person data['person'] , 返回一个 Observer 实例，且person 中携带该实例
 function defineReactive(obj, key, val) {
     let childOb = observe(obj[key])
     // debugger
