@@ -1,58 +1,15 @@
-class MyVue {
-    constructor(options) {
-        this.$options = options // 存储初始化配置，$options 用于暴露出去的配置属性
-        this.initData()
-        this.initWatch()
-    }
-    initData() {
-        let data = this._data = this.$options.data // _data 声明 用于给内部使用, 常用 _ 开头
-        let keys = Object.keys(data)
-
-        // 实现this.XXX 可以访问到 data 中的数据，方式是通过 Object.definProperty 定义指向真实访问方式的属性
-        for (let i = 0; i < keys.length; i++) {
-            Object.defineProperty(this, keys[i], {
-                configurable: true,
-                enumerable: true,
-                get: function proxyGetter() {
-                    // console.log('劫持 this 访问');
-                    return this._data[keys[i]]
-                },
-                set: function proxySetter(value) {
-                    this._data[keys[i]] = value
-                },
-            })
-        }
-        observe(data)
-    }
-    initWatch() {
-        let watch = this.$options.watch
-        let keys = Object.keys(watch)
-        for (let i = 0; i < keys.length; i++) {
-            this.$watch(keys[i], watch[keys[i]])
-        }
-    }
-    $watch(exp, cb) {
-        new Watcher(this, exp, cb)
-    }
-    $set(target, key, value) {
-        let ob = target.__ob__
-        defineReactive(target, key, value)
-        ob.dep.notify()
-
-        // this.person, name, {a: 1}
-    }
-}
-
 // 设置观察者
 function observe(data) {
     let type = Object.prototype.toString.call(data)
     if (type !== '[object Object]' && type !== '[object Array]') return
-    if(data.__ob__) return data.__ob__
+    if (data.__ob__) return data.__ob__
 
     return new Observer(data)
 }
+// this.data.person
 function defineReactive(obj, key, val) {
     let childOb = observe(obj[key])
+    // debugger
     let dep = new Dep() // 声明订阅者收集容器
 
     Object.defineProperty(obj, key, {
@@ -62,7 +19,7 @@ function defineReactive(obj, key, val) {
             // console.log('劫持 this._data[keys[i]] 的访问', key);
             if (Dep.target) {
                 dep.depend() // 当获取该属性时，订阅者类上有订阅者，则将其收集在该属性的订阅者收集容器中
-                if(childOb) childOb.dep.depend()
+                if (childOb) childOb.dep.depend()
             }
             return val
         },
@@ -74,24 +31,29 @@ function defineReactive(obj, key, val) {
     })
 }
 
-const data = {
-    name: 'zs',
-    age: 19,
-    friends: [],
-    __ob__: { // Observer实例
-        dep: {} // Dep 实例
+class Dep {
+    constructor() {
+        this.subs = [] // 订阅者容器
+    }
+    depend() {
+        if (Dep.target) { // 收集订阅者
+            this.subs.push(Dep.target)
+        }
+    }
+    notify() {
+        this.subs.forEach(watcher => watcher.run())
     }
 }
-
 class Observer {
     constructor(data) {
         this.dep = new Dep()
-        if(Array.isArray(data)) {
+        if (Array.isArray(data)) {
             data.__proto__ = arrayMethods
             this.observeArray(data)
         } else {
             this.walk(data)
         }
+        // debugger
         Object.defineProperty(data, '__ob__', {
             enumerable: false,
             configurable: false,
@@ -118,7 +80,7 @@ const arrayMethods = Object.create(Array.prototype)
 const arrayProto = Array.prototype
 
 metationMethods.forEach(method => {
-    if(method === 'push') this.__ob__.observeArray(args)
+    if (method === 'push') (this.__ob__ && this.__ob__.observeArray(args))
 
     arrayMethods[method] = function (...args) {
         const result = arrayProto[method].apply(this, args)
@@ -160,16 +122,47 @@ class Watcher {
     }
 }
 
-class Dep {
-    constructor() {
-        this.subs = [] // 订阅者容器
+class Myvue {
+    constructor(options) {
+        this.$options = options // 存储初始化配置，$options 用于暴露出去的配置属性
+        this.initData()
+        this.initWatch()
     }
-    depend() {
-        if (Dep.target) { // 收集订阅者
-            this.subs.push(Dep.target)
+    initData() {
+        let data = this._data = this.$options.data // _data 声明 用于给内部使用, 常用 _ 开头
+        let keys = Object.keys(data)
+
+        // 实现this.XXX 可以访问到 data 中的数据，方式是通过 Object.definProperty 定义指向真实访问方式的属性
+        for (let i = 0; i < keys.length; i++) {
+            Object.defineProperty(this, keys[i], {
+                configurable: true,
+                enumerable: true,
+                get: function proxyGetter() {
+                    // console.log('劫持 this 访问');
+                    return this._data[keys[i]]
+                },
+                set: function proxySetter(value) {
+                    this._data[keys[i]] = value
+                },
+            })
+        }
+        observe(data)
+    }
+    initWatch() {
+        let watch = this.$options.watch
+        let keys = Object.keys(watch)
+        for (let i = 0; i < keys.length; i++) {
+            this.$watch(keys[i], watch[keys[i]])
         }
     }
-    notify() {
-        this.subs.forEach(watcher => watcher.run())
+    $watch(exp, cb) {
+        new Watcher(this, exp, cb)
+    }
+    $set(target, key, value) {
+        let ob = target.__ob__
+        defineReactive(target, key, value)
+        ob.dep.notify()
+
+        // this.person, name, {a: 1}
     }
 }

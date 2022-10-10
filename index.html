@@ -11,8 +11,9 @@
 </head>
 
 <body>
+    <div id="app"></div>
     <script>
-        const vue = new MyVue({
+        const vue = new Myvue({
             // const vue = new Vue({
             el: '#app',
             data: {
@@ -22,14 +23,19 @@
                 }
             },
             watch: {
-                message: function () {
-                    console.log('message is running', this.message);
-                }
+                person: function () {
+                    console.log('person is running', this.person);
+                },
+                // message: function () {
+                //     console.log('message is running', this.message);
+                // }
             }
         })
 
-        vue.$set(vue.person, 'age', {a: 10})
+        // vue.$delete(vue.person, 'name')
+        // vue.$delete(vue._data, 'person')
 
+        // vue.$set(vue.person, 'age', 10)
 
     </script>
 </body>
