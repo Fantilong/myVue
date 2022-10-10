@@ -16,7 +16,10 @@
             // const vue = new Vue({
             el: '#app',
             data: {
-                message: 'Hello Vue!'
+                message: 'Hello Vue!',
+                person: {
+                    name: 'zs'
+                }
             },
             watch: {
                 message: function () {
@@ -25,9 +28,7 @@
             }
         })
 
-        vue.message = 1
-        vue.message = 2
-        vue.message = 3
+        vue.$set(vue.person, 'age', {a: 10})
 
 
     </script>

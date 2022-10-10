@@ -34,17 +34,25 @@ class MyVue {
     $watch(exp, cb) {
         new Watcher(this, exp, cb)
     }
+    $set(target, key, value) {
+        let ob = target.__ob__
+        defineReactive(target, key, value)
+        ob.dep.notify()
+
+        // this.person, name, {a: 1}
+    }
 }
 
 // 设置观察者
 function observe(data) {
     let type = Object.prototype.toString.call(data)
     if (type !== '[object Object]' && type !== '[object Array]') return
+    if(data.__ob__) return data.__ob__
 
-    new Observe(data)
+    return new Observer(data)
 }
 function defineReactive(obj, key, val) {
-    observe(val)
+    let childOb = observe(obj[key])
     let dep = new Dep() // 声明订阅者收集容器
 
     Object.defineProperty(obj, key, {
@@ -52,7 +60,10 @@ function defineReactive(obj, key, val) {
         enumerable: true,
         get: function proxyGetter() {
             // console.log('劫持 this._data[keys[i]] 的访问', key);
-            if (Dep.target) dep.depend() // 当获取该属性时，订阅者类上有订阅者，则将其收集在该属性的订阅者收集容器中
+            if (Dep.target) {
+                dep.depend() // 当获取该属性时，订阅者类上有订阅者，则将其收集在该属性的订阅者收集容器中
+                if(childOb) childOb.dep.depend()
+            }
             return val
         },
         set: function proxySetter(newVal) {
@@ -63,9 +74,30 @@ function defineReactive(obj, key, val) {
     })
 }
 
-class Observe {
+const data = {
+    name: 'zs',
+    age: 19,
+    friends: [],
+    __ob__: { // Observer实例
+        dep: {} // Dep 实例
+    }
+}
+
+class Observer {
     constructor(data) {
-        this.walk(data)
+        this.dep = new Dep()
+        if(Array.isArray(data)) {
+            data.__proto__ = arrayMethods
+            this.observeArray(data)
+        } else {
+            this.walk(data)
+        }
+        Object.defineProperty(data, '__ob__', {
+            enumerable: false,
+            configurable: false,
+            value: this,
+            writable: true
+        })
     }
     walk(data) {
         let keys = Object.keys(data)
@@ -73,7 +105,28 @@ class Observe {
             defineReactive(data, keys[i], data[keys[i]])
         }
     }
+    observeArray(arr) {
+        for (let i = 0; i < arr.length; i++) {
+            observe(arr[i])
+        }
+    }
 }
+
+
+const metationMethods = ['push', 'pop', 'shift']
+const arrayMethods = Object.create(Array.prototype)
+const arrayProto = Array.prototype
+
+metationMethods.forEach(method => {
+    if(method === 'push') this.__ob__.observeArray(args)
+
+    arrayMethods[method] = function (...args) {
+        const result = arrayProto[method].apply(this, args)
+        this.__ob__.dep.notify()
+        return result
+    }
+})
+
 
 let watcherQueue = []
 let watcherId = 0
@@ -91,20 +144,15 @@ class Watcher {
         Dep.target = null // 收集完成后，清除
     }
     run() {
-        // 处理第一次赋值的notify
+        // 只处理第一次赋值的notify
         if (watcherQueue.indexOf(this.id) !== -1) return
         // debugger
-
-        // vue.message = 1
-        // vue.message = 2
-        // vue.message = 3
 
         watcherQueue.push(this.id)
         let index = watcherQueue.length - 1
 
         // 异步执行, 等属性赋值完成后执行
         Promise.resolve().then(() => {
-            // 这时，
             this.cb.call(this.vm)
             // 清空队列，实际上这里也只收集了一个watcher实例
             watcherQueue.splice(index, 1)
