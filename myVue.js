@@ -36,13 +36,18 @@ class Dep {
     constructor() {
         this.subs = [] // 订阅者容器
     }
+    addSub(watcher) {
+        this.subs.push(watcher)
+    }
     depend() {
         if (Dep.target) { // 收集订阅者
-            this.subs.push(Dep.target)
+            Dep.target.addDep(this)
+            // this.subs.push(Dep.target)
         }
     }
     notify() {
-        this.subs.forEach(watcher => watcher.run())
+        this.subs.forEach(watcher => watcher.update())
+        // this.subs.forEach(watcher => watcher.run())
     }
 }
 class Observer {
@@ -93,18 +98,40 @@ metationMethods.forEach(method => {
 
 let watcherQueue = []
 let watcherId = 0
+let targetStack = []
 class Watcher {
-    constructor(vm, exp, cb) {
+    constructor(vm, exp, cb, options = {}) {
+        this.dirty = this.lazy = !!options.lazy
         this.vm = vm
         this.exp = exp
         this.cb = cb
-        this.get()
+        // this.get()
         this.id = ++watcherId // 每个 watcher 实例的 id 都是 1
+        this.deps = []
+        if (!this.lazy) this.get()
+    }
+    addDep(dep) {
+        if (this.deps.indexOf(dep) !== -1) return
+        this.deps.push(dep)
+        dep.addSub(this)
     }
     get() {
         Dep.target = this
-        this.vm[this.exp] // 获取一下属性值，收集订阅
-        Dep.target = null // 收集完成后，清除
+        targetStack.push(this)
+        if (typeof this.exp === 'function') {
+            this.value = this.exp.call(this.vm)
+        } else {
+            this.vm[this.exp] // 获取一下属性值，收集订阅
+        }
+        targetStack.pop()
+        Dep.target = targetStack.length ? targetStack[targetStack.length - 1] : null // 收集完成后，清除
+    }
+    update() {
+        if (this.lazy) {
+            this.dirty = true
+        } else {
+            this.run()
+        }
     }
     run() {
         // 只处理第一次赋值的notify
@@ -112,12 +139,14 @@ class Watcher {
         // debugger
 
         watcherQueue.push(this.id)
-        let index = watcherQueue.length - 1
+        // let index = watcherQueue.length - 1
 
         // 异步执行, 等属性赋值完成后执行
         Promise.resolve().then(() => {
+            this.get()
             this.cb.call(this.vm)
             // 清空队列，实际上这里也只收集了一个watcher实例
+            let index = watcherQueue.indexOf(this.id)
             watcherQueue.splice(index, 1)
         })
     }
@@ -127,6 +156,7 @@ class Myvue {
     constructor(options) {
         this.$options = options // 存储初始化配置，$options 用于暴露出去的配置属性
         this.initData()
+        this.initComputed()
         this.initWatch()
     }
     initData() {
@@ -149,11 +179,43 @@ class Myvue {
         }
         observe(data)
     }
+    initComputed() {
+        let computed = this.$options.computed
+        if (!computed) return
+
+        let keys = Object.keys(computed)
+        for (let i = 0; i < keys.length; i++) {
+            // 计算属性 本质上还是一个监听器，鉴定的是计算属性的计算函数当中的使用到的属性，监听到的属性发生变化，则，重新执行该函数
+            const watcher = new Watcher(this, computed[keys[i]], function () { }, { lazy: true })
+            Object.defineProperty(this, keys[i], {
+                enumerable: true,
+                configurable: true,
+                get: function computedGetter() {
+                    if (watcher.dirty) {
+                        watcher.get()
+                        watcher.dirty = false
+                    }
+
+                    if (Dep.target) {
+                        watcher.deps.forEach((dep) => dep.depend())
+                    }
+
+                    return watcher.value
+                },
+                set: function computedSetter() {
+                    console.warn('请不要对计算属性赋值')
+                }
+            })
+
+        }
+    }
     initWatch() {
         let watch = this.$options.watch
+        if (!watch) return
         let keys = Object.keys(watch)
         for (let i = 0; i < keys.length; i++) {
-            this.$watch(keys[i], watch[keys[i]])
+            new Watcher(this, keys[i], watch[keys[i]])
+            // this.$watch(keys[i], watch[keys[i]])
         }
     }
     $watch(exp, cb) {

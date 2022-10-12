@@ -17,18 +17,22 @@
             // const vue = new Vue({
             el: '#app',
             data: {
-                message: 'Hello Vue!',
-                person: {
-                    name: 'zs'
-                }
+                a: 1,
+                b: 2,
             },
             watch: {
-                person: function () {
-                    console.log('person is running', this.person);
-                },
+                // c() {
+                //     console.log('c is running');
+                // },
                 // message: function () {
                 //     console.log('message is running', this.message);
                 // }
+            },
+            computed: {
+                c: function () {
+                    console.log('计算c');
+                    return this.a + this.b
+                }
             }
         })
 
