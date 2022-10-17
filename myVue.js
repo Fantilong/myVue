@@ -152,12 +152,33 @@ class Watcher {
     }
 }
 
+class VNode {
+    constructor(tag, attrs, children, text) {
+        this.tag = tag
+        this.attrs = attrs
+        this.children = children
+        this.text = text
+    }
+}
+
 class Myvue {
     constructor(options) {
         this.$options = options // 存储初始化配置，$options 用于暴露出去的配置属性
         this.initData()
         this.initComputed()
         this.initWatch()
+    }
+    $mount(el) {
+        this.$el = document.querySelector(el)
+        this._watcher = new Watcher(this, () => this._update(this.$options.render.call(this)), () => { })
+    }
+    _update(vnode) {
+        if (this._vnode) {
+            patch(this._vnode, vnode)
+        } else {
+            patch(this.$el, vnode)
+        }
+        this._vnode = vnode
     }
     initData() {
         let data = this._data = this.$options.data // _data 声明 用于给内部使用, 常用 _ 开头
@@ -228,4 +249,177 @@ class Myvue {
 
         // this.person, name, {a: 1}
     }
+    _c(tag, attrs, children) {
+        return new VNode(tag, attrs, children)
+    }
+    _v(text) {
+        return new VNode(null, null, null, text)
+    }
+    _s(val) {
+        if (val === null || val === undefined) {
+            return ''
+        } else if (typeof val === 'object') {
+            return JSON.stringify(val)
+        } else {
+            return String(val)
+        }
+    }
 }
+
+function parser(html) {
+    let stack = []
+    let root
+    let currentParent
+    while (html) {
+        let ltIndex = html.indexOf('<')
+        if (ltIndex > 0) { //前面有文本
+            //type 1-元素节点  2-带变量的文本节点  3-纯文本节点
+            let text = html.slice(0, ltIndex)
+            const element = {
+                type: 3,
+                text,
+                parent: currentParent
+            }
+            currentParent.children.push(element)
+            html = html.slice(ltIndex)
+        } else if (html[ltIndex + 1] !== '/') { //前面没有文本，且是开始标签
+            let gtIndex = html.indexOf('>')
+            const element = {
+                type: 1,
+                tag: html.slice(ltIndex + 1, gtIndex), //不考虑dom的任何属性
+                parent: currentParent,
+                children: [],
+            }
+
+            if (!root) {
+                root = element
+            } else {
+                currentParent.children.push(element)
+            }
+            stack.push(element)
+            currentParent = element
+            html = html.slice(gtIndex + 1)
+        } else { //结束标签
+            let gtIndex = html.indexOf('>')
+            stack.pop()
+            currentParent = stack[stack.length - 1]
+            html = html.slice(gtIndex + 1)
+        }
+    }
+    return root
+}
+
+function parseText(text) {
+    let originText = text
+    let tokens = []
+    let type = 3
+    while (text) {
+        let start = text.indexOf('{{')
+        let end = text.indexOf('}}')
+        if (start !== -1 && end !== -1) {
+            type = 2
+            if (start > 0) {
+                tokens.push(JSON.stringify(text.slice(0, start)))
+            }
+            let exp = text.slice(start + 2, end)
+            tokens.push(`_s(${exp})`)
+            text = text.slice(end + 2)
+        } else {
+            tokens.push(JSON.stringify(text))
+            text = ''
+        }
+    }
+    let element = {
+        type,
+        text: originText,
+    }
+    type === 2 ? element.expression = tokens.join('+') : ''
+
+    return element
+}
+
+function generate(ast) {
+    const code = genElement(ast)
+    return {
+        render: `with(this){return ${code}}`
+    }
+}
+
+function genElement(el) {
+    const children = genChildren(el)
+    let code = `_c('${el.tag}', {}, ${children})`
+    return code
+}
+
+function genChildren(el) {
+    if (el.children.length) {
+        return '[' + el.children.map(child => genNode(child)).join(',') + ']'
+    }
+}
+
+function genNode(node) {
+    if (node.type === 1) {
+        return genElement(node)
+    } else {
+        return genText(node)
+    }
+}
+
+function genText(text) {
+    return `_v(${text.type === 2 ? text.expression : JSON.stringify(text.text)})`
+}
+
+function createEle(vnode) {
+    if (!vnode.tag) {
+        const el = document.createTextNode(vnode.text)
+        vnode.elm = el
+        return el
+    }
+
+    const el = document.createElement(vnode.tag)
+    vnode.elm = el
+    vnode.children.map(createEle).forEach(childDom => {
+        el.appendChild(childDom)
+    })
+
+    return el
+}
+
+function patch(oldNode, newNode) {
+    const isRealElement = oldNode.nodeType
+
+    // 如果是对真实dom进行patch
+    if (isRealElement) {
+        let parent = oldNode.parentNode
+        parent.replaceChild(createEle(newNode), oldNode)
+        return
+    }
+
+    // 当前 vdom 对应的真实 dom
+    let el = oldNode.elm
+    // 当亲 vdom 对应的真实父级 dom
+    let parent = el.parentNode
+    if (newNode) {
+        newNode.elm = el
+    }
+    if (!newNode) { // 新节点不存在，删除
+        parent.removeChild(el)
+    } else if (changed(newNode, oldNode)) {
+        parent.replaceChild(createEle(newNode), el)
+    } else if (newNode.children) {
+        const newLength = newNode.children.length
+        const oldLength = oldNode.children.length
+        for (let i = 0; i < newLength.length || i < oldLength; i++) {
+            if (i >= oldLength) {
+                el.appendChild(createEle(newNode.children[i]))
+            } else {
+                patch(oldNode.children[i], newNode.children[i])
+            }
+        }
+    }
+}
+
+function changed(newNode, oldNode) {
+    return (newNode.tag !== oldNode.tag || newNode.text !== oldNode.text)
+}
+
