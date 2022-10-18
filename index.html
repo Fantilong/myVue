@@ -8,17 +8,22 @@
     <title>vue 原理</title>
     <!-- <script src="./vue.js"></script> -->
     <script src="./myVue.js"></script>
+    <script src="./parser.js"></script>
+    <script src="./codegen.js"></script>
 </head>
 
 <body>
-    <div id="app"></div>
+    <div>
+        123
+        <p>{{name}} {{name}} 123</p>
+        567
+    </div>
     <script>
         const vue = new Myvue({
             // const vue = new Vue({
-            el: '#app',
+            el: 'div',
             data: {
-                a: 1,
-                b: 2,
+                name: 'zs'
             },
             watch: {
                 // c() {
@@ -28,13 +33,10 @@
                 //     console.log('message is running', this.message);
                 // }
             },
-            computed: {
-                c: function () {
-                    console.log('计算c');
-                    return this.a + this.b
-                }
-            }
         })
+
+        // const ast = parser(document.querySelector('div').outerHTML)
+        // const code = generate(ast)
 
         // vue.$delete(vue.person, 'name')
         // vue.$delete(vue._data, 'person')

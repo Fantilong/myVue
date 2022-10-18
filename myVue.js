@@ -1,3 +1,5 @@
+// import parser from "./parser";
+
 // 设置观察者
 function observe(data) {
     let type = Object.prototype.toString.call(data)
@@ -167,18 +169,28 @@ class Myvue {
         this.initData()
         this.initComputed()
         this.initWatch()
+
+        if(options.el) {
+            let html = document.querySelector(options.el).outerHTML
+            let ast = parser(html) // 生成抽象语法树
+            let code = generate(ast).render // 生成，生成VNode的代码
+            this.$options.render = new Function(code) // 保存渲染代码
+            this.$mount(options.el) // 执行渲染
+        }
     }
     $mount(el) {
-        this.$el = document.querySelector(el)
+        this.$el = document.querySelector(el) // 
+        // 监听渲染事件，即：绑定到 dom 的变量，变量修改时触发渲染事件
+        // this.$options.render 生成 vue 管理的 dom 的 VNode
         this._watcher = new Watcher(this, () => this._update(this.$options.render.call(this)), () => { })
     }
     _update(vnode) {
         if (this._vnode) {
-            patch(this._vnode, vnode)
+            patch(this._vnode, vnode) // 如果渲染过，则存在 VNode, 则，对比已存在 VNode 和新的 VNode
         } else {
-            patch(this.$el, vnode)
+            patch(this.$el, vnode) // 如果没有渲染过，则直接比对 DOM 和新的 VNode
         }
-        this._vnode = vnode
+        this._vnode = vnode // 替换新生成的 VNode
     }
     initData() {
         let data = this._data = this.$options.data // _data 声明 用于给内部使用, 常用 _ 开头
@@ -249,13 +261,13 @@ class Myvue {
 
         // this.person, name, {a: 1}
     }
-    _c(tag, attrs, children) {
+    _c(tag, attrs, children) { // 处理元素节点
         return new VNode(tag, attrs, children)
     }
-    _v(text) {
+    _v(text) { // 处理文本节点
         return new VNode(null, null, null, text)
     }
-    _s(val) {
+    _s(val) { // 处理变量文本节点
         if (val === null || val === undefined) {
             return ''
         } else if (typeof val === 'object') {
@@ -266,111 +278,8 @@ class Myvue {
     }
 }
 
-function parser(html) {
-    let stack = []
-    let root
-    let currentParent
-    while (html) {
-        let ltIndex = html.indexOf('<')
-        if (ltIndex > 0) { //前面有文本
-            //type 1-元素节点  2-带变量的文本节点  3-纯文本节点
-            let text = html.slice(0, ltIndex)
-            const element = {
-                type: 3,
-                text,
-                parent: currentParent
-            }
-            currentParent.children.push(element)
-            html = html.slice(ltIndex)
-        } else if (html[ltIndex + 1] !== '/') { //前面没有文本，且是开始标签
-            let gtIndex = html.indexOf('>')
-            const element = {
-                type: 1,
-                tag: html.slice(ltIndex + 1, gtIndex), //不考虑dom的任何属性
-                parent: currentParent,
-                children: [],
-            }
-
-            if (!root) {
-                root = element
-            } else {
-                currentParent.children.push(element)
-            }
-            stack.push(element)
-            currentParent = element
-            html = html.slice(gtIndex + 1)
-        } else { //结束标签
-            let gtIndex = html.indexOf('>')
-            stack.pop()
-            currentParent = stack[stack.length - 1]
-            html = html.slice(gtIndex + 1)
-        }
-    }
-    return root
-}
-
-function parseText(text) {
-    let originText = text
-    let tokens = []
-    let type = 3
-    while (text) {
-        let start = text.indexOf('{{')
-        let end = text.indexOf('}}')
-        if (start !== -1 && end !== -1) {
-            type = 2
-            if (start > 0) {
-                tokens.push(JSON.stringify(text.slice(0, start)))
-            }
-            let exp = text.slice(start + 2, end)
-            tokens.push(`_s(${exp})`)
-            text = text.slice(end + 2)
-        } else {
-            tokens.push(JSON.stringify(text))
-            text = ''
-        }
-    }
-    let element = {
-        type,
-        text: originText,
-    }
-    type === 2 ? element.expression = tokens.join('+') : ''
-
-    return element
-}
-
-function generate(ast) {
-    const code = genElement(ast)
-    return {
-        render: `with(this){return ${code}}`
-    }
-}
-
-function genElement(el) {
-    const children = genChildren(el)
-    let code = `_c('${el.tag}', {}, ${children})`
-    return code
-}
-
-function genChildren(el) {
-    if (el.children.length) {
-        return '[' + el.children.map(child => genNode(child)).join(',') + ']'
-    }
-}
-
-function genNode(node) {
-    if (node.type === 1) {
-        return genElement(node)
-    } else {
-        return genText(node)
-    }
-}
-
-function genText(text) {
-    return `_v(${text.type === 2 ? text.expression : JSON.stringify(text.text)})`
-}
-
 function createEle(vnode) {
-    if (!vnode.tag) {
+    if (!vnode.tag) { // 不是元素节点
         const el = document.createTextNode(vnode.text)
         vnode.elm = el
         return el
@@ -388,6 +297,7 @@ function createEle(vnode) {
 function patch(oldNode, newNode) {
     const isRealElement = oldNode.nodeType
 
+    // 首次渲染，oldNode 是真实dom, Element 元素，直接获取父级，通过Node 接口 replaceChild 替换子节点
     // 如果是对真实dom进行patch
     if (isRealElement) {
         let parent = oldNode.parentNode
@@ -395,6 +305,8 @@ function patch(oldNode, newNode) {
         return
     }
 
+    // 不是首次渲染，则是 VNode
+    // VNode 当中存储了，该 VNode 对应的真实DOM
     // 当前 vdom 对应的真实 dom
     let el = oldNode.elm
     // 当亲 vdom 对应的真实父级 dom
@@ -404,7 +316,7 @@ function patch(oldNode, newNode) {
     }
     if (!newNode) { // 新节点不存在，删除
         parent.removeChild(el)
-    } else if (changed(newNode, oldNode)) {
+    } else if (changed(newNode, oldNode)) { // 新老节点不一样，新节点覆盖老节点
         parent.replaceChild(createEle(newNode), el)
     } else if (newNode.children) {
         const newLength = newNode.children.length
